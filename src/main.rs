@@ -1,7 +1,7 @@
 use chrono::Local;
 use clap::Parser;
-use md5::{Digest as Md5Digest, Md5};
-use sha2::{Digest as Sha2Digest, Sha256};
+use md5::{Digest, Md5};
+use sha2::Sha256;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -16,8 +16,8 @@ use windows_capture::frame::Frame;
 use windows_capture::graphics_capture_api::InternalCaptureControl;
 use windows_capture::monitor::Monitor;
 use windows_capture::settings::{
-    ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings,
-    SecondaryWindowSettings, MinimumUpdateIntervalSettings, DirtyRegionSettings,
+    ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+    MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
 };
 
 #[derive(Parser, Debug)]
@@ -113,8 +113,8 @@ fn calc_hashes(file_path: &Path) -> Result<(String, String), Box<dyn std::error:
         sha256_hasher.update(chunk);
     }
 
-    let md5_hex = format!("{:x}", md5_hasher.finalize());
-    let sha256_hex = format!("{:x}", sha256_hasher.finalize());
+    let md5_hex = hex::encode(md5_hasher.finalize());
+    let sha256_hex = hex::encode(sha256_hasher.finalize());
 
     Ok((md5_hex, sha256_hex))
 }
