@@ -17,6 +17,7 @@ use windows_capture::graphics_capture_api::InternalCaptureControl;
 use windows_capture::monitor::Monitor;
 use windows_capture::settings::{
     ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings,
+    SecondaryWindowSettings, MinimumUpdateIntervalSettings, DirtyRegionSettings,
 };
 
 #[derive(Parser, Debug)]
@@ -144,6 +145,8 @@ fn write_sum_file(
 struct CaptureFlags {
     output_path: PathBuf,
     fps: u32,
+    width: u32,
+    height: u32,
     stop_flag: Arc<AtomicBool>,
     start_instant: Instant,
     max_duration: Option<Duration>,
@@ -175,8 +178,8 @@ impl GraphicsCaptureApiHandler for Recorder {
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         let flags = ctx.flags;
-        let width = ctx.item.width()?;
-        let height = ctx.item.height()?;
+        let width = flags.width;
+        let height = flags.height;
 
         let out_str = flags
             .output_path
@@ -248,6 +251,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let output_path = prepare_output_path(&args.output)?;
     let target_monitor = select_monitor(args.monitor)?;
+    let width = target_monitor.width()?;
+    let height = target_monitor.height()?;
 
     let stop_flag = Arc::new(AtomicBool::new(false));
     let flag_clone = stop_flag.clone();
@@ -267,6 +272,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let flags = CaptureFlags {
         output_path: output_path.clone(),
         fps: args.fps,
+        width,
+        height,
         stop_flag,
         start_instant,
         max_duration,
@@ -276,6 +283,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         target_monitor,
         CursorCaptureSettings::Default,
         DrawBorderSettings::WithoutBorder,
+        SecondaryWindowSettings::Default,
+        MinimumUpdateIntervalSettings::Default,
+        DirtyRegionSettings::Default,
         ColorFormat::Rgba8,
         flags,
     );
