@@ -13,7 +13,7 @@ use windows_capture::encoder::{
     AudioSettingsBuilder, ContainerSettingsBuilder, VideoEncoder, VideoSettingsBuilder,
 };
 use windows_capture::frame::Frame;
-use windows_capture::graphics_capture_api::InternalCaptureControl;
+use windows_capture::graphics_capture_api::{GraphicsCaptureApi, InternalCaptureControl};
 use windows_capture::monitor::Monitor;
 use windows_capture::settings::{
     ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
@@ -27,9 +27,13 @@ struct Args {
     #[arg(short, long, default_value = "output.mp4")]
     output: String,
 
-    /// 目标帧率（如 30 或 60）
-    #[arg(short, long, default_value_t = 30)]
+    /// 目标帧率（如 30 或 60；系统支持时同时限制捕获帧率上限）
+    #[arg(short, long, default_value_t = 30, value_parser = clap::value_parser!(u32).range(1..))]
     fps: u32,
+
+    /// 目标视频码率（Mbps，默认 8；文件大小约等于码率 × 时长）
+    #[arg(short = 'b', long, default_value_t = 8, value_parser = clap::value_parser!(u32).range(1..))]
+    bitrate: u32,
 
     /// 显示器编号（从 1 开始；不填或 0 表示主显示器；传入 --list 可查看）
     #[arg(short, long, default_value_t = 0)]
@@ -145,6 +149,7 @@ fn write_sum_file(
 struct CaptureFlags {
     output_path: PathBuf,
     fps: u32,
+    bitrate: u32,
     width: u32,
     height: u32,
     stop_flag: Arc<AtomicBool>,
@@ -186,7 +191,9 @@ impl GraphicsCaptureApiHandler for Recorder {
             .to_str()
             .ok_or("输出路径包含无效的 UTF-8 字符")?;
 
-        let video_settings = VideoSettingsBuilder::new(width, height).frame_rate(flags.fps);
+        let video_settings = VideoSettingsBuilder::new(width, height)
+            .frame_rate(flags.fps)
+            .bitrate(flags.bitrate);
 
         let encoder = VideoEncoder::new(
             video_settings,
@@ -269,9 +276,18 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let start_time_str = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let start_instant = Instant::now();
 
+    let min_update_interval = if GraphicsCaptureApi::is_minimum_update_interval_supported()
+        .unwrap_or(false)
+    {
+        MinimumUpdateIntervalSettings::Custom(Duration::from_secs_f64(1.0 / f64::from(args.fps)))
+    } else {
+        MinimumUpdateIntervalSettings::Default
+    };
+
     let flags = CaptureFlags {
         output_path: output_path.clone(),
         fps: args.fps,
+        bitrate: args.bitrate.saturating_mul(1_000_000),
         width,
         height,
         stop_flag,
@@ -284,7 +300,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         CursorCaptureSettings::Default,
         DrawBorderSettings::WithoutBorder,
         SecondaryWindowSettings::Default,
-        MinimumUpdateIntervalSettings::Default,
+        min_update_interval,
         DirtyRegionSettings::Default,
         ColorFormat::Rgba8,
         flags,
